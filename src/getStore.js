@@ -1,59 +1,53 @@
-import { createStore, combineReducers,applyMiddleware } from 'redux'
-import { routerReducer as router, routerMiddleware } from 'react-router-redux'
+// I REMOVED ALL ORIGIONAL COMMENTS
+// I HAVE ADDED SOME MY OWN COMMENTS BELOW
+
+import { createStore, combineReducers,applyMiddleware } from 'redux';
+import { routerReducer as router, routerMiddleware } from 'react-router-redux';
 import { createLogger } from 'redux-logger';
 import createSagaMiddleware from 'redux-saga';
-import fetchQuestionSaga from './sagas/fetch-question-saga'
-import fetchQuestionsSaga from './sagas/fetch-questions-saga'
-import * as reducers from './reducers'
+import fetchQuestionSaga from './sagas/fetch-question-saga';
+import fetchQuestionsSaga from './sagas/fetch-questions-saga';
+import { rootSaga } from "./module/root/rootSaga";
+import axios from 'axios';
 
-/**
- * Get store creates a new instance of the store configurable for use
- * on the client (for a living app) and the server (for pre-rendered HTML)
- * @param history
- * A history component. Should be browserHistory for client, and memoryHistroy for server.
- * @param defaultState
- * The default state of the application. Since this is used by React Router, this can affect
- * the application's initial render
- */
-export default function(history,defaultState = {}){
-    /**
-     * Create middleware for React-router and pass in history
-     */
-    const middleware = routerMiddleware(history);
+// WANT TO IMPORT MY OWN ROOT SAGA/REDUCER FROM "./MODULES/ROOT"
+//import * as reducers from './reducers';
+import reducers from "./modules/root/rootReducer";
 
-    /**
-     * Create saga middleware to run our sagas
-     */
-    const sagaMiddleware = createSagaMiddleware();
+export default function(history, defaultState = {}, req){
 
-    /**
-     * Create a logger to provide insights to the application's state from the developer window
-     * You are encouraged to remove this for production.
-     */
+  // WANT CREATE A AXIOS INSTANCE WITH THE PROXY API SEPERATE
+  // SOMEHOW OUR SAGAS NEED TO ALL GET THIS
+  const axiosInstance = axios.create({
+    baseURL: process.env.PROXY_API,
+    headers: { cookie: req.get('cookie') || '' }
+  });
 
+  const middleware = routerMiddleware(history);
 
-    const middlewareChain = [middleware, sagaMiddleware];
-    if(process.env.NODE_ENV === 'development') {
-        const logger = createLogger();
-        middlewareChain.push(logger);
-    }
+  const sagaMiddleware = createSagaMiddleware(); // HOW CAN BE PASS IN A AXIOS INSTANCE - PROXI API FOR SEPERATE API SERVER ?
 
-    /**
-     * Create a store with the above middlewares, as well as an object containing reducers
-     */
-    const store = createStore(combineReducers({
-        ...reducers,
-        router
-    }), defaultState,applyMiddleware(...middlewareChain));
+  const middlewareChain = [middleware, sagaMiddleware];
 
-    /**
-     * Run the sagas which will in turn wait for the appropriate action type before making requests
-     */
-    sagaMiddleware.run(fetchQuestionSaga);
-    sagaMiddleware.run(fetchQuestionsSaga);
+  if(process.env.NODE_ENV === 'development') {
+    const logger = createLogger();
+    middlewareChain.push(logger);
+  }
 
-    /**
-     * Return the store to the caller for application initialization
-     */
-    return store;
+  const store = createStore(combineReducers({
+    ...reducers,
+    router
+  }), defaultState,applyMiddleware(...middlewareChain));
+
+  // THIS IS SOME CODE FROM ANOTHER TUTORIAL SERIES I HAVE BEEN PLAYING WITH
+  // I SUPPOSE I AM HOPING THIS FUCNTION CAN CALL ALL REQUESTS TO FILL STATE UP WITH ALL REQUIRED DEPENDING ON THE ROUTE !!
+  const runSagas = sagaMiddleware.run;
+
+  // sagaMiddleware.run(fetchQuestionSaga);
+  // sagaMiddleware.run(fetchQuestionsSaga);
+
+  sagaMiddleware.run(rootSaga);
+
+  return store;
+
 }
